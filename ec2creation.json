@@ -1,0 +1,355 @@
+{
+  "AWSTemplateFormatVersion" : "2010-09-09",
+
+  "Description" : "AWS CloudFormation Sample Template EC2InstanceWithSecurityGroupSample: Create an Amazon EC2 instance running the Amazon Linux AMI. The AMI is chosen based on the region in which the stack is run. This example creates an EC2 security group for the instance to give you SSH access. **WARNING** This template creates an Amazon EC2 instance. You will be billed for the AWS resources used if you create a stack from this template.",
+
+  "Parameters" : {
+    
+    "Environment" : {
+      "Description" : "Select the environment you want to create the EC2Instance",
+      "Type" : "String",
+      "AllowedValues" : [ "DEV" , "INT" , "STAGE" , "UAT", "PROD" ],
+      "ConstraintDescription" : "must be a select an environment"
+    },
+  
+  "ImageId" : {
+      "Description" : "Select the AMI image for the OS",
+      "Type" : "String",
+      "AllowedValues" : [ "ami-f3352ae4" ],
+      "ConstraintDescription" : "must be a select an AMI id."
+    },
+
+
+    "InstanceType" : {
+      "Description" : "WebServer EC2 instance type",
+      "Type" : "String",
+      "Default" : "t2.small",
+      "AllowedValues" : [  "t2.medium", "m4.xlarge", "t2.large", "t2.small"],
+      "ConstraintDescription" : "must be a valid EC2 instance type."
+    },
+  
+    
+  "KeyName": {
+      "Description" : "Name of an existing EC2 KeyPair to enable SSH access to the instance",
+      "Type": "AWS::EC2::KeyPair::KeyName",
+      "ConstraintDescription" : "must be the name of an existing EC2 KeyPair.",
+    "AllowedValues" : [ "wudigital-aws-devops", "wu-digital-r3" ]
+    },
+  
+
+     "AvailabilityZone" : {
+      "Description" : "AvailabilityZone of this server  of this server that belongs to the VP",
+      "Type" : "String",
+      "AllowedValues" : [ "us-east-1a","us-east-1c" ],
+      "ConstraintDescription" : "must be a select an AvailabilityZone."
+    },
+  
+    "SubnetId" : {
+      "Description" : "Subnets of this server that belongs to the VPC",
+      "Type" : "String",
+      "AllowedValues" : [ "subnet-ee32e3b5","subnet-685eb345","subnet-4f9f7d14","subnet-489f7d13","subnet-6b5eb346","subnet-4e9f7d15","subnet-655eb348"],
+      "ConstraintDescription" : "must be a valid subnet."
+    },
+	"SubnetId1" : {
+      "Description" : "Subnets of this server that belongs to the VPC",
+      "Type" : "String",
+	  "Default" : "subnet-21a07d0c",
+      "AllowedValues" : [ "subnet-ee32e3b5","subnet-21a07d0c"],
+      "ConstraintDescription" : "must be a valid subnet."
+    },
+  
+  "SecurityGroupIds" : {
+      "Description" : "Pick the security groups which the ec2 will belong",
+      "Type" : "String",
+    "AllowedValues" : [ "sg-de94dba3", "wu-digital-devint-R-DEV-EXT", "wu-digital-devint-Y-DEV-EXT", "wu-digital-devint-G-DEV-EXT", "wu-digital-devint-R-DEV-INT", "wu-digital-devint-Y-DEV-INT", "wu-digital-devint-G-DEV-INT","wu-digital-sandbox-R-DEV-EXT", "wu-digital-sandbox-Y-DEV-EXT", "wu-digital-sandbox-G-DEV-EXT", "wu-digital-devint-G-DEV-INT","wu-digital-sandbox-R-DEV-INT", "wu-digital-sandbox-Y-DEV-INT", "wu-digital-sandbox-G-DEV-INT"],
+      "ConstraintDescription" : "select a valid security group."
+    },
+  "VpcId" : {
+      "Description" : "Vpc ID",
+      "Type" : "String",
+	  "Default" : "vpc-f0e4b497",
+      "AllowedValues" : [ "vpc-f0e4b497"],
+      "ConstraintDescription" : "select a valid VPC."
+    }	
+	
+
+  
+    },
+
+    "Mappings": {
+    "DEV": {
+      "AppAsgMap":{
+                "HCGracePeriod":"600",
+                "MinSize":"2",
+                "MaxSize":"4",
+                "DesiredCapacity":"2"
+              }
+            }
+          },
+		  
+		  
+
+ 
+  "Resources" : {
+
+   "AppLc":{
+      "Type" : "AWS::AutoScaling::LaunchConfiguration",
+       "Properties" : {
+            "AssociatePublicIpAddress" : "false",
+            "EbsOptimized" : "false",
+            "ImageId" : { "Ref" : "ImageId" } ,
+            "InstanceMonitoring" : "true",
+           "InstanceType" : { "Ref" : "InstanceType" },
+           "KeyName" : { "Ref" : "KeyName" } ,
+           "SecurityGroups" : [{ "Ref" : "SecurityGroupIds" }, {"Fn::ImportValue" : "MgmtSg"} ]
+           }
+        },
+
+  "AppAsg": {
+       "Type" : "AWS::AutoScaling::AutoScalingGroup",
+       "Properties" : {
+                "AvailabilityZones" : [{ "Ref" : "AvailabilityZone" }],
+                "DesiredCapacity" : {"Fn::FindInMap":[{"Ref": "Environment"},"AppAsgMap","DesiredCapacity"]},
+                "HealthCheckGracePeriod" : {"Fn::FindInMap":[{"Ref": "Environment"},"AppAsgMap","HCGracePeriod"]},
+                "HealthCheckType" : "EC2",
+                "LaunchConfigurationName" : {"Ref":"AppLc"},
+                "MaxSize" : {"Fn::FindInMap":[{"Ref": "Environment"},"AppAsgMap","MaxSize"]},
+                "MinSize" : {"Fn::FindInMap":[{"Ref": "Environment"},"AppAsgMap","MinSize"]},
+                "Tags" : [ 
+                    {"Key":"Name", "Value":"FirstASG", "PropagateAtLaunch":"true" },
+                    {"Key":"Role","Value":"Webserver","PropagateAtLaunch":"true"},
+                    {"Key":"Service","Value":"Apache","PropagateAtLaunch":"true"},
+                    {"Key":"Envrionment","Value":{"Ref":"Environment"},"PropagateAtLaunch":"true"}
+                ],
+                "TerminationPolicies" : [ "OldestInstance" ],
+                "VPCZoneIdentifier" : [{ "Ref" : "SubnetId" }]
+               
+            }  
+        },
+	"AppElb1": {
+            "Type": "AWS::ElasticLoadBalancing::LoadBalancer",
+            "Properties": {
+                "ConnectionDrainingPolicy" : { "Enabled" : "true" , "Timeout" : "60" },
+                "CrossZone" : "true",
+                "HealthCheck" : { "HealthyThreshold":"3",
+                                  "Interval":"30",
+                                  "Target":"HTTP:80/blank.html",
+                                  "Timeout":"5",
+                                  "UnhealthyThreshold":"2"},
+                "Listeners" : [
+                  { "InstancePort": "80", "InstanceProtocol": "HTTP", "LoadBalancerPort": "80",  "Protocol":"HTTP" }],
+                "Scheme" : "internet-facing",
+                "Subnets":[{ "Ref" : "SubnetId" }, { "Ref" : "SubnetId1" }],
+                "SecurityGroups":[{ "Ref" : "SecurityGroupIds" } ],
+                "Tags" : [ {"Key":"Name","Value":{"Fn::Join":["",[{"Ref":"AWS::StackName"},"-App-lb"]]}} ]
+            }
+        },	
+	"AppLc1":{
+      "Type" : "AWS::AutoScaling::LaunchConfiguration",
+       "Properties" : {
+            "AssociatePublicIpAddress" : "false",
+            "EbsOptimized" : "false",
+            "ImageId" : { "Ref" : "ImageId" } ,
+            "InstanceMonitoring" : "true",
+           "InstanceType" : { "Ref" : "InstanceType" },
+           "KeyName" : { "Ref" : "KeyName" } ,
+           "SecurityGroups" : [{ "Ref" : "SecurityGroupIds" } ],
+		   "UserData": {"Fn::Base64":{"Fn::Join":["\n",[
+                    "#!/bin/bash",
+                    "exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1",
+                    "echo '=================================='",
+                    "echo 'Setting up Environment for app'",
+                    "echo '=================================='",
+                    "AWS_INSTANCE_ID=$( curl http://169.254.169.254/latest/meta-data/instance-id )",
+					"ROOT_DISK_ID=$(",
+					"aws ec2 describe-volumes --filter \"Name=attachment.instance-id,Values=${AWS_INSTANCE_ID}\"",
+                    "         --query 'Volumes[0].{ID:VolumeId}' --output=text" ,
+					" )",
+					"aws ec2 create-tags --resources ${ROOT_DISK_ID} --tags Key=Name,Value=${AWS_INSTANCE_ID}",
+                    "",
+					"exit 0"
+                ]]}}
+           }
+        },
+
+   "AppAsg1": {
+       "Type" : "AWS::AutoScaling::AutoScalingGroup",
+       "Properties" : {
+                "AvailabilityZones" : [{ "Ref" : "AvailabilityZone" }],
+                "DesiredCapacity" : {"Fn::FindInMap":[{"Ref": "Environment"},"AppAsgMap","DesiredCapacity"]},
+                "HealthCheckGracePeriod" : {"Fn::FindInMap":[{"Ref": "Environment"},"AppAsgMap","HCGracePeriod"]},
+                "HealthCheckType" : "EC2",
+                "LaunchConfigurationName" : {"Ref":"AppLc"},
+				"LoadBalancerNames" : [ {"Ref":"AppElb1"} ],
+                "MaxSize" : {"Fn::FindInMap":[{"Ref": "Environment"},"AppAsgMap","MaxSize"]},
+                "MinSize" : {"Fn::FindInMap":[{"Ref": "Environment"},"AppAsgMap","MinSize"]},
+                "Tags" : [ 
+                    {"Key":"Name", "Value":"FirstASGASP", "PropagateAtLaunch":"true" },
+                    {"Key":"Role","Value":"Webserver","PropagateAtLaunch":"true"},
+                    {"Key":"Service","Value":"Apache","PropagateAtLaunch":"true"},
+                    {"Key":"Envrionment","Value":{"Ref":"Environment"},"PropagateAtLaunch":"true"}
+                ],
+                "TerminationPolicies" : [ "OldestInstance" ],
+                "VPCZoneIdentifier" : [{ "Ref" : "SubnetId" }]
+               
+            }  
+        },
+	"AppUpAsp" : {
+            "Type" : "AWS::AutoScaling::ScalingPolicy",
+            "Properties" : {
+                "AdjustmentType" : "ChangeInCapacity",
+                "AutoScalingGroupName" : { "Ref" : "AppAsg1" },
+                "Cooldown" : "600",
+                "ScalingAdjustment" : "1" }
+        },
+     
+	"AppDownAsp" : {
+            "Type" : "AWS::AutoScaling::ScalingPolicy",
+            "Properties" : {
+                "AdjustmentType" : "ChangeInCapacity",
+                "AutoScalingGroupName" : { "Ref" : "AppAsg1" },
+                "Cooldown" : "600",
+                "ScalingAdjustment" : "-1" }
+        },
+	"AppCpuHighCwa": {
+         "Type": "AWS::CloudWatch::Alarm",
+         "Properties": {
+              "AlarmDescription": "Scale-up if CPU > 70% for 5 minutes",
+              "MetricName": "CPUUtilization",
+              "Namespace": "AWS/EC2",
+              "Statistic": "Average",
+              "Period": "300",
+              "EvaluationPeriods": "1",
+              "Threshold": "70",
+              "AlarmActions": [ { "Ref": "AppUpAsp" } ],
+              "Dimensions": [ { "Name": "AutoScalingGroupName", "Value": { "Ref": "AppAsg1" } } ],
+              "ComparisonOperator": "GreaterThanThreshold"
+          }
+		},
+	"AppCpuLowCwa": {
+         "Type": "AWS::CloudWatch::Alarm",
+         "Properties": {
+            "AlarmDescription": "Scale-down if CPU < 20% for 5 minutes",
+            "MetricName": "CPUUtilization",
+            "Namespace": "AWS/EC2",
+            "Statistic": "Average",
+            "Period": "300",
+            "EvaluationPeriods": "1",
+            "Threshold": "20",
+            "AlarmActions": [ { "Ref": "AppDownAsp" } ],
+            "Dimensions": [ { "Name": "AutoScalingGroupName", "Value": { "Ref": "AppAsg1" } } ],
+            "ComparisonOperator": "LessThanThreshold"
+          }
+	},
+	"EcsCl":{
+	  "Type" : "AWS::ECS::Cluster",
+		"Properties" : {
+			"ClusterName" : "WU-digital-ECS"
+		}
+	},
+	"EcsAlb": {
+            "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
+            "Properties": {
+                "Scheme" : "internal",
+                "Subnets":[{ "Ref" : "SubnetId" }, { "Ref" : "SubnetId1" }],
+                "SecurityGroups":[{ "Ref" : "SecurityGroupIds" } ],
+                "Tags" : [ {"Key":"Name","Value":{"Fn::Join":["",[{"Ref":"AWS::StackName"},"-ECS-Alb"]]}} ]
+            }
+        },
+    "EcsAlbLs": {
+       "Type":"AWS::ElasticLoadBalancingV2::Listener",
+       "Properties":{
+           "DefaultActions":[{
+            "Type":"forward",
+            "TargetGroupArn":{"Ref":"EcsTg"}
+          }
+        ],
+        "LoadBalancerArn":{
+          "Ref":"EcsAlb"
+        },
+        "Port":"80",
+        "Protocol":"HTTP"
+      }
+    },
+    "EcsAlbLsRule":{
+      "Type":"AWS::ElasticLoadBalancingV2::ListenerRule",
+      "DependsOn":"EcsAlbLs",
+      "Properties":{
+        "Actions":[
+          {
+            "Type":"forward",
+            "TargetGroupArn":{
+              "Ref":"EcsTg"
+            }
+          }
+        ],
+        "Conditions":[
+          {
+            "Field":"path-pattern",
+            "Values":[ "/" ]
+          }
+        ],
+        "ListenerArn":{
+          "Ref":"EcsAlbLs"
+        },
+        "Priority":1
+      }
+    },
+    "EcsTg":{
+      "Type":"AWS::ElasticLoadBalancingV2::TargetGroup",
+      "DependsOn":"EcsAlb",
+      "Properties":{
+        "HealthCheckIntervalSeconds":10,
+        "HealthCheckPath":"/",
+        "HealthCheckProtocol":"HTTP",
+        "HealthCheckTimeoutSeconds":5,
+        "HealthyThresholdCount":2,
+        "Name":"EcsTg",
+        "Port":80,
+        "Protocol":"HTTP",
+        "UnhealthyThresholdCount":2,
+        "VpcId":{
+          "Ref":"VpcId"
+        },
+	  "Tags" : [{ "Key" : "Name", "Value" : "ECS TargetGroup" }]
+      }
+    },	
+	"EcsAsg": {
+       "Type" : "AWS::AutoScaling::AutoScalingGroup",
+	   "Properties" : {
+                "AvailabilityZones" : [{ "Ref" : "AvailabilityZone" }],
+                "DesiredCapacity" : {"Fn::FindInMap":[{"Ref": "Environment"},"AppAsgMap","DesiredCapacity"]},
+                "HealthCheckGracePeriod" : {"Fn::FindInMap":[{"Ref": "Environment"},"AppAsgMap","HCGracePeriod"]},
+                "HealthCheckType" : "EC2",
+                "LaunchConfigurationName" : {"Ref":"EcsLc"},
+				"MaxSize" : {"Fn::FindInMap":[{"Ref": "Environment"},"AppAsgMap","MaxSize"]},
+                "MinSize" : {"Fn::FindInMap":[{"Ref": "Environment"},"AppAsgMap","MinSize"]},
+                "Tags" : [ 
+                    {"Key":"Name", "Value":"ECS", "PropagateAtLaunch":"true" },
+                    {"Key":"Role","Value":"ECS Cluster","PropagateAtLaunch":"true"},
+                    {"Key":"Service","Value":"Docker","PropagateAtLaunch":"true"},
+                    {"Key":"Envrionment","Value":{"Ref":"Environment"},"PropagateAtLaunch":"true"}
+                ],
+                "TerminationPolicies" : [ "OldestInstance" ],
+                "VPCZoneIdentifier" : [{ "Ref" : "SubnetId" }]
+               
+            }  
+        },
+	"EcsLc":{
+      "Type" : "AWS::AutoScaling::LaunchConfiguration",
+       "Properties" : {
+           "AssociatePublicIpAddress" : "false",
+           "EbsOptimized" : "false",
+           "ImageId" : { "Ref" : "ImageId" } ,
+           "InstanceMonitoring" : "true",
+           "InstanceType" : { "Ref" : "InstanceType" },
+           "KeyName" : { "Ref" : "KeyName" } ,
+           "SecurityGroups" : [{ "Ref" : "SecurityGroupIds" } ]
+           }
+        }
+	
+	},
+  "Outputs" : {
+
+  }
+}
